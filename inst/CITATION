@@ -1,0 +1,11 @@
+citHeader("To cite the gcemod package in publications, please use:")
+
+bibentry(
+  bibtype = "Article",
+  title   = "{gcemod}: Generalized Competing Event Modeling with {Lunn}-{McNeil} Estimation in {R}",
+  author  = person(c("Loren", "K."), "Mell"),
+  journal = "Journal of Statistical Software",
+  year    = "2026",
+  note    = "Manuscript submitted for publication",
+  header  = "The methods and package are described in:"
+)

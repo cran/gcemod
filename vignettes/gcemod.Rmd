@@ -1,0 +1,140 @@
+---
+title: "Generalized Competing Event Modeling with gcemod"
+author: "gcemod"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Generalized Competing Event Modeling with gcemod}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", fig.width = 6, fig.height = 4)
+library(gcemod)
+```
+
+## What gcemod does
+
+`gcemod` estimates covariate effects on **omega+** --- the ratio of the hazard
+for an *event of interest* to the hazard for a *competing event* --- on either
+the cause-specific (Cox) or subdistribution (Fine-Gray) scale. Confidence
+intervals and p-values come from the **Lunn-McNeil** stacked-model construction.
+Per-subject omega = omega+/(1+omega+) is reported as a descriptive quantity so
+model-predicted values can be compared with observed ones.
+
+The workflow: (1) fit the GCE model, (2) build a risk score, (3) find cutpoints
+that maximize the omega+ difference between groups, (4) draw alligator plots of
+cumulative incidence by group, and (5) check calibration of predicted vs.
+observed omega+.
+
+## Two contrasting cohorts
+
+The package bundles two competing-risks example datasets that illustrate
+contrasting GCE applications. They are provided for illustration only and do not
+represent real patients. In `hn` (head and neck) the event of interest (cancer
+recurrence) is *more* frequent than the competing event (omega+ > 1). In `prostate`
+the event of interest (distant metastasis or prostate-cancer death) is *less* frequent
+than the competing event (other-cause death) (omega+ < 1). Both use `status`:
+0 = censored, 1 = event of interest, 2 = competing event, with `time` in years.
+
+```{r data}
+data(hn)
+Ind <- data.frame(event     = as.integer(hn$status == 1),   # recurrence
+                  competing = as.integer(hn$status == 2))   # death w/o recurrence
+Cov <- hn[, c("age", "smoker", "t_cat", "n_cat", "p16")]
+```
+
+### 1. Fit the GCE model (cause-specific)
+
+```{r cox}
+fit <- gcecox(hn$time, Ind, Cov, M = 5, t = 5)
+summary(fit)
+```
+
+Each `P-value` tests whether that covariate shifts omega+ (event of interest vs.
+competing event); the omnibus test asks the same jointly.
+
+The Fine-Gray version uses the same interface:
+
+```{r fg, eval = FALSE}
+fit_fg <- gcefg(hn$time, Ind, Cov, M = 5, t = 5)
+summary(fit_fg)
+```
+
+### 2. Risk score
+
+The linear predictor is stored in `fit$riskscore`, and per-subject omega+ /
+omega at time `t` in `fit$omegaplus` / `fit$omega`.
+
+```{r rs}
+head(data.frame(riskscore = fit$riskscore,
+                omegaplus = fit$omegaplus, omega = fit$omega))
+```
+
+### 3. Cutpoints maximizing the omega+ difference
+
+```{r cut}
+cuts <- gce_cutpoints(fit, groups = 2, method = "optimal")
+cuts$summary
+cuts$cutpoints
+```
+
+### 4. Alligator plot (cumulative incidence by risk group)
+
+Risk groups are distinguished by color and event types by line type (event of
+interest solid, competing event dashed) on a single panel.
+
+```{r alligator, fig.height=4}
+gce_alligator(fit, groups = cuts)
+```
+
+### 5. Calibration of predicted vs. observed omega+
+
+```{r calib}
+gce_calibration(fit, which = "omegaplus", groups = 5)
+```
+
+### Discrimination
+
+```{r perf}
+gce_performance(fit)
+```
+
+## The competing-dominant contrast: prostate
+
+Running the same workflow on `prostate` shows the opposite regime. Here the
+competing event (other-cause death) dominates, so omega+ ratios and the risk
+score point the other way, and the alligator jaws open with the competing-event
+CIF on top.
+
+```{r prostate, eval = FALSE}
+data(prostate)
+Ind_p <- data.frame(event     = as.integer(prostate$status == 1),
+                    competing = as.integer(prostate$status == 2))
+Cov_p <- prostate[, c("age", "psa", "gleason", "t2b", "comorbidity")]
+
+fit_p <- gcecox(prostate$time, Ind_p, Cov_p, M = 5, t = 5)
+summary(fit_p)
+gce_alligator(fit_p, groups = 2)
+```
+
+## References
+
+Lunn M, McNeil D (1995) Applying Cox regression to competing risks.
+*Biometrics* 51:524--32.
+
+Carmona R, et al. (2014) Validated competing event model for the stage I-II
+endometrial cancer population. *Int J Radiat Oncol Biol Phys* 89:888--98.
+
+Carmona R, et al. (2016) Improved method to stratify elderly patients with
+cancer at risk for competing events. *J Clin Oncol* 34:1270--77.
+
+Mell LK, et al. (2019) Nomogram to predict the benefit of intensive treatment
+for locoregionally advanced head and neck cancer. *Clin Cancer Res*
+25:7078--7088.
+
+Zakeri K, et al. (2020) Predictive classifier for intensive treatment of head
+and neck cancer. *Cancer* 126:5263--5273.
+
+Mell LK, et al. (2024) Effects of androgen deprivation therapy on prostate
+cancer outcomes according to competing event risk. *Eur Urol* 85:373--381.
