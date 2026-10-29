@@ -4,16 +4,7 @@
 \alias{gcecif}
 \title{Generalized competing event model on the cumulative-incidence-ratio scale}
 \usage{
-gcecif(
-  Time,
-  Ind,
-  Cov,
-  M = 5,
-  t,
-  method = c("logit", "logratio"),
-  ridge = 0,
-  conf.level = 0.95
-)
+gcecif(Time, Ind, Cov, M = 5, t, conf.level = 0.95)
 }
 \arguments{
 \item{Time}{numeric vector of follow-up times.}
@@ -27,24 +18,19 @@ column 2 = competing event (\code{0}/\code{1}).}
 
 \item{t}{landmark time at which \eqn{\rho} is evaluated.}
 
-\item{method}{estimation scale: \code{"logit"} (default; logit-link GEE on the
-share) or \code{"logratio"} (identity-link GEE on \eqn{\log\rho}).}
-
-\item{ridge}{non-negative ridge penalty on the covariate coefficients (not the
-intercept), used only with \code{method = "logit"} to stabilize weakly
-identified fits. Default \code{0}.}
-
 \item{conf.level}{confidence level (default \code{0.95}).}
 }
 \value{
 An object of class \code{"gcemod"} (subclass \code{"gcecif"}) with:
   \code{coef} (log \eqn{\rho} ratios), \code{result} (ratio table with CIs and
   p-values), \code{omnibus} (Wald test that all \eqn{\rho} ratios equal 1),
-  \code{riskscore} (linear predictor), \code{scaling} (covariate means/SDs and
-  per-SD effects), \code{F1}, \code{F2}, \code{rho0} (baseline \eqn{\rho} at the
-  mean covariate profile), \code{rho} (per-subject fitted \eqn{\rho}),
-  \code{pseudo} (per-subject pseudo-values), and the design matrix, time, and
-  cause coding used by \code{\link{gce_tidy}}.
+  \code{riskscore} (interaction linear predictor, mean-centered),
+  \code{scaling} (covariate means/SDs and per-SD effects), \code{F1},
+  \code{F2}, \code{rho0} (marginal \eqn{F_1(t)/F_2(t)}), \code{rho}
+  (per-subject fitted \eqn{\rho}), \code{pseudo} (a two-column data frame of
+  per-cause pseudo-observations), \code{coef_f2} (the log-linear
+  \eqn{F_2(t \mid z)} nuisance model), \code{converged}, and the design
+  matrix, time, and cause coding used by \code{\link{gce_tidy}}.
 }
 \description{
 Fits a generalized competing event (GCE) model on the \emph{cumulative
@@ -58,15 +44,21 @@ to the cause-specific (\code{\link{gcecox}}) and subdistribution
 (\code{\link{gcefg}}) omega+ models and returns a compatible \code{"gcemod"}
 object.
 
-Effects are estimated by jackknife pseudo-observation regression. Two
-equivalent parameterizations are provided (both estimate the effect on
-\eqn{\log \rho(t)}): \code{method = "logit"} (default) regresses pseudo-values
-of the bounded share \eqn{\pi_1 = F_1/(F_1+F_2)} by a logit-link GEE, and
-\code{method = "logratio"} regresses pseudo-values of \eqn{\log \rho} directly
-by an identity-link GEE (ordinary least squares). Both use a robust (sandwich)
-variance. A GCE risk score is formed from the model linear predictor, so
-\code{exp(riskscore)} is a subject's \eqn{\rho} relative to the average subject
-(see \code{\link{gce_riskscore}}, \code{\link{gce_scaling}}).
+Effects are estimated by a \emph{stacked pseudo-observation regression}: each
+subject contributes one jackknife pseudo-observation for \eqn{F_1(t)} and one
+for \eqn{F_2(t)} (both mean-type functionals of the Aalen-Johansen estimator,
+for which conditional unbiasedness of pseudo-observations is established),
+and a single log-link GEE is fit to the stacked pairs with an event-type
+indicator. The main effects model \eqn{\log F_2(t \mid z)}; the event-type
+interaction coefficients estimate \eqn{\log \rho(t \mid z) =
+\log F_1(t \mid z) - \log F_2(t \mid z)} directly. Because each subject
+appears twice, a cluster-robust (subject) sandwich variance is used, which
+captures the dependence between a subject's two pseudo-observations induced
+by the shared all-cause survivor. This is the cumulative-incidence-scale
+analogue of the stacked Lunn-McNeil construction used on the two hazard
+scales. A GCE risk score is formed from the interaction linear predictor, so
+\code{exp(riskscore)} is a subject's \eqn{\rho} relative to the average
+subject (see \code{\link{gce_riskscore}}, \code{\link{gce_scaling}}).
 }
 \details{
 Because \eqn{F_k(t) = \int_0^t S(u^-)\,h_k(u)\,du} with \eqn{S} the all-cause
@@ -77,11 +69,20 @@ of cumulative incidences is a non-collapsible, marginal-over-time measure, so
 \code{exp(coef)} is interpreted as a conditional association with the realized
 event mix, not a mechanism-level per-cause effect.
 
+The estimating function is \emph{linear} in the two per-cause (mean-type)
+pseudo-observations, so its conditional unbiasedness follows from the
+standard pseudo-observation theory (Graw et al. 2009; Overgaard et al. 2017);
+pseudo-observations of the nonlinear ratio itself are not used. The working
+model comprises a log-linear model for \eqn{F_2(t \mid z)} (the nuisance main
+effects, reported as \code{$coef_f2}) and a log-linear model for
+\eqn{\rho(t \mid z)} (the target interactions, reported as \code{$coef}).
+
 The estimand is defined for a genuine competing-risks setting, in which both
-\eqn{F_1(t)} and \eqn{F_2(t)} are appreciable at the landmark \code{t}. If the
-competing event is effectively absent, or \code{t} precedes appreciable
-competing-event incidence, \eqn{\log \rho} is weakly identified; the optional
-\code{ridge} penalty stabilizes such fits.
+\eqn{F_1(t)} and \eqn{F_2(t)} are appreciable at the landmark \code{t}. If
+the competing event is effectively absent, or \code{t} precedes appreciable
+competing-event incidence, \eqn{\log \rho} is weakly identified and the fit
+may fail or return very large standard errors; this should be read as a
+signal that the competing-risks premise does not hold.
 }
 \examples{
 data(prostate)
@@ -96,6 +97,17 @@ gce_tidy(fit)
 Andersen PK, Klein JP, Rosthoj S (2003). Generalized linear models for
 correlated pseudo-observations, with applications to multi-state models.
 \emph{Biometrika} 90:15-27.
+
+Graw F, Gerds TA, Schumacher M (2009). On pseudo-values for regression
+analysis in competing risks models. \emph{Lifetime Data Analysis} 15:241-255.
+
+Overgaard M, Parner ET, Pedersen J (2017). Asymptotic theory of generalized
+estimating equations based on jack-knife pseudo-observations. \emph{The
+Annals of Statistics} 45:1988-2015.
+
+Overgaard M, Parner ET, Pedersen J (2018). Estimating the variance in a
+pseudo-observation scheme with competing risks. \emph{Scandinavian Journal
+of Statistics} 45:923-940.
 }
 \seealso{
 \code{\link{gcecox}}, \code{\link{gcefg}}, \code{\link{gce_tidy}},

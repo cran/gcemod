@@ -1,3 +1,53 @@
+# gcemod 0.3.1
+
+* **`gcecif()` estimator replaced.** The cumulative-incidence-ratio model is
+  estimated by a *stacked pseudo-observation regression*, wherein 
+  each subject contributes one jackknife pseudo-observation
+  for each of `F1(t)` and `F2(t)` --- mean-type functionals of the
+  Aalen-Johansen estimator, for which conditional unbiasedness of the
+  pseudo-observations is established --- and a single log-link GEE is fit to
+  the stacked pairs with an event-type indicator. The main effects model
+  `log F2(t | z)`; the event-type interactions estimate `log rho(t | z)`
+  directly; the variance is cluster-robust on subject, capturing the
+  dependence between a subject's two pseudo-observations induced by the shared
+  all-cause survivor. This is the cumulative-incidence-scale analogue of the
+  stacked Lunn-McNeil construction used by `gcecox()` and `gcefg()`.
+
+  The previous estimator regressed jackknife pseudo-values of the nonlinear
+  ratio itself, so estimates could be biased for large covariate effects. The
+  `method` and `ridge` arguments are removed; `$pseudo` is now a two-column
+  data frame of per-cause pseudo-observations, and `$coef_f2` and
+  `$converged` are added. The interface, risk score, and downstream tooling
+  (`gce_cutpoints()`, `gce_alligator()`, `gce_calibration()`,
+  `gce_riskscore()`, `gce_tidy()`) are unchanged.
+
+* **New `gce_omegatime()` PRH diagnostic plot.** Plots a nonparametric
+  estimate of a chosen GCE contrast over follow-up, for the whole sample or
+  within risk groups (`groups`, resolved as in `gce_cutpoints()`). The `which`
+  argument selects the contrast: `"omega"` (default; the Nelson-Aalen
+  cumulative hazard share Lambda1/(Lambda1+Lambda2)), `"omegaplus"`
+  (Lambda1/Lambda2, log scale), `"omegatilde"` / `"omegatildeplus"` (the
+  subdistribution analogues built from -log(1 - Fk) with Aalen-Johansen
+  CIFs), `"rho"` (F1/F2, log scale), or `"pi"` (F1/(F1+F2), the bounded share
+  form of rho, so logit(pi) = log(rho)). Under a time-constant cause-specific
+  relative hazard the omega, omega+, rho, and pi displays are exactly flat, so a
+  flat curve is a direct visual check of the proportional relative-hazards
+  assumption --- and drift shows the time range over which it is
+  approximately valid; with groups, parallel curves on a log scale indicate
+  a time-constant group contrast. `xmax` truncates the display to avoid
+  over-reading the sparse late-follow-up tail. Successor to the
+  omega-versus-time display in `gcerisk`.
+
+* **Bootstrap variance option for the subdistribution scale.** `gcefg()` and
+  `lunnmcneil(type = "finegray")` gain `se = c("robust", "boot")` and `B`.
+  The default cluster-robust variance treats the IPCW censoring weights as
+  fixed, which errs on the conservative side; `se = "boot"` performs a
+  subject bootstrap that re-estimates the weights within each resample, so
+  the variance fully accounts for their estimation.
+
+* Morten Overgaard, who proposed the corrected gcecif() estimator, is
+  credited as a package contributor.
+
 # gcemod 0.3.0
 
 First CRAN release.

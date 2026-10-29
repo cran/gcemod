@@ -12,15 +12,21 @@
 #' (\code{\link{gcefg}}) omega+ models and returns a compatible \code{"gcemod"}
 #' object.
 #'
-#' Effects are estimated by jackknife pseudo-observation regression. Two
-#' equivalent parameterizations are provided (both estimate the effect on
-#' \eqn{\log \rho(t)}): \code{method = "logit"} (default) regresses pseudo-values
-#' of the bounded share \eqn{\pi_1 = F_1/(F_1+F_2)} by a logit-link GEE, and
-#' \code{method = "logratio"} regresses pseudo-values of \eqn{\log \rho} directly
-#' by an identity-link GEE (ordinary least squares). Both use a robust (sandwich)
-#' variance. A GCE risk score is formed from the model linear predictor, so
-#' \code{exp(riskscore)} is a subject's \eqn{\rho} relative to the average subject
-#' (see \code{\link{gce_riskscore}}, \code{\link{gce_scaling}}).
+#' Effects are estimated by a \emph{stacked pseudo-observation regression}: each
+#' subject contributes one jackknife pseudo-observation for \eqn{F_1(t)} and one
+#' for \eqn{F_2(t)} (both mean-type functionals of the Aalen-Johansen estimator,
+#' for which conditional unbiasedness of pseudo-observations is established),
+#' and a single log-link GEE is fit to the stacked pairs with an event-type
+#' indicator. The main effects model \eqn{\log F_2(t \mid z)}; the event-type
+#' interaction coefficients estimate \eqn{\log \rho(t \mid z) =
+#' \log F_1(t \mid z) - \log F_2(t \mid z)} directly. Because each subject
+#' appears twice, a cluster-robust (subject) sandwich variance is used, which
+#' captures the dependence between a subject's two pseudo-observations induced
+#' by the shared all-cause survivor. This is the cumulative-incidence-scale
+#' analogue of the stacked Lunn-McNeil construction used on the two hazard
+#' scales. A GCE risk score is formed from the interaction linear predictor, so
+#' \code{exp(riskscore)} is a subject's \eqn{\rho} relative to the average
+#' subject (see \code{\link{gce_riskscore}}, \code{\link{gce_scaling}}).
 #'
 #' @details
 #' Because \eqn{F_k(t) = \int_0^t S(u^-)\,h_k(u)\,du} with \eqn{S} the all-cause
@@ -31,11 +37,20 @@
 #' \code{exp(coef)} is interpreted as a conditional association with the realized
 #' event mix, not a mechanism-level per-cause effect.
 #'
+#' The estimating function is \emph{linear} in the two per-cause (mean-type)
+#' pseudo-observations, so its conditional unbiasedness follows from the
+#' standard pseudo-observation theory (Graw et al. 2009; Overgaard et al. 2017);
+#' pseudo-observations of the nonlinear ratio itself are not used. The working
+#' model comprises a log-linear model for \eqn{F_2(t \mid z)} (the nuisance main
+#' effects, reported as \code{$coef_f2}) and a log-linear model for
+#' \eqn{\rho(t \mid z)} (the target interactions, reported as \code{$coef}).
+#'
 #' The estimand is defined for a genuine competing-risks setting, in which both
-#' \eqn{F_1(t)} and \eqn{F_2(t)} are appreciable at the landmark \code{t}. If the
-#' competing event is effectively absent, or \code{t} precedes appreciable
-#' competing-event incidence, \eqn{\log \rho} is weakly identified; the optional
-#' \code{ridge} penalty stabilizes such fits.
+#' \eqn{F_1(t)} and \eqn{F_2(t)} are appreciable at the landmark \code{t}. If
+#' the competing event is effectively absent, or \code{t} precedes appreciable
+#' competing-event incidence, \eqn{\log \rho} is weakly identified and the fit
+#' may fail or return very large standard errors; this should be read as a
+#' signal that the competing-risks premise does not hold.
 #'
 #' @param Time numeric vector of follow-up times.
 #' @param Ind a data frame of event indicators: column 1 = event of interest,
@@ -43,26 +58,34 @@
 #' @param Cov a data frame of covariates (factors are expanded automatically).
 #' @param M number of bins for the \eqn{\rho} risk plot (default \code{5}).
 #' @param t landmark time at which \eqn{\rho} is evaluated.
-#' @param method estimation scale: \code{"logit"} (default; logit-link GEE on the
-#'   share) or \code{"logratio"} (identity-link GEE on \eqn{\log\rho}).
-#' @param ridge non-negative ridge penalty on the covariate coefficients (not the
-#'   intercept), used only with \code{method = "logit"} to stabilize weakly
-#'   identified fits. Default \code{0}.
 #' @param conf.level confidence level (default \code{0.95}).
 #'
 #' @return An object of class \code{"gcemod"} (subclass \code{"gcecif"}) with:
 #'   \code{coef} (log \eqn{\rho} ratios), \code{result} (ratio table with CIs and
 #'   p-values), \code{omnibus} (Wald test that all \eqn{\rho} ratios equal 1),
-#'   \code{riskscore} (linear predictor), \code{scaling} (covariate means/SDs and
-#'   per-SD effects), \code{F1}, \code{F2}, \code{rho0} (baseline \eqn{\rho} at the
-#'   mean covariate profile), \code{rho} (per-subject fitted \eqn{\rho}),
-#'   \code{pseudo} (per-subject pseudo-values), and the design matrix, time, and
-#'   cause coding used by \code{\link{gce_tidy}}.
+#'   \code{riskscore} (interaction linear predictor, mean-centered),
+#'   \code{scaling} (covariate means/SDs and per-SD effects), \code{F1},
+#'   \code{F2}, \code{rho0} (marginal \eqn{F_1(t)/F_2(t)}), \code{rho}
+#'   (per-subject fitted \eqn{\rho}), \code{pseudo} (a two-column data frame of
+#'   per-cause pseudo-observations), \code{coef_f2} (the log-linear
+#'   \eqn{F_2(t \mid z)} nuisance model), \code{converged}, and the design
+#'   matrix, time, and cause coding used by \code{\link{gce_tidy}}.
 #'
 #' @references
 #' Andersen PK, Klein JP, Rosthoj S (2003). Generalized linear models for
 #' correlated pseudo-observations, with applications to multi-state models.
 #' \emph{Biometrika} 90:15-27.
+#'
+#' Graw F, Gerds TA, Schumacher M (2009). On pseudo-values for regression
+#' analysis in competing risks models. \emph{Lifetime Data Analysis} 15:241-255.
+#'
+#' Overgaard M, Parner ET, Pedersen J (2017). Asymptotic theory of generalized
+#' estimating equations based on jack-knife pseudo-observations. \emph{The
+#' Annals of Statistics} 45:1988-2015.
+#'
+#' Overgaard M, Parner ET, Pedersen J (2018). Estimating the variance in a
+#' pseudo-observation scheme with competing risks. \emph{Scandinavian Journal
+#' of Statistics} 45:923-940.
 #'
 #' @examples
 #' data(prostate)
@@ -75,11 +98,8 @@
 #' @seealso \code{\link{gcecox}}, \code{\link{gcefg}}, \code{\link{gce_tidy}},
 #'   \code{\link{gce_riskscore}}
 #' @export
-gcecif <- function(Time, Ind, Cov, M = 5, t,
-                   method = c("logit", "logratio"),
-                   ridge = 0, conf.level = 0.95) {
+gcecif <- function(Time, Ind, Cov, M = 5, t, conf.level = 0.95) {
   cl <- match.call()
-  method <- match.arg(method)
   chk <- .gce_check(Time, Ind, Cov, M, t)
   Time <- chk$Time; Ind <- chk$Ind; Cov <- chk$Cov
   n <- length(Time)
@@ -118,29 +138,33 @@ gcecif <- function(Time, Ind, Cov, M = 5, t,
     fi <- .cif(Yi, d1i, d2i); F1i[i] <- fi[1]; F2i[i] <- fi[2]
   }
 
-  X   <- stats::model.matrix(~ ., data = Cov)   # intercept + covariates
-  eps <- 1e-9
-  if (method == "logratio") {
-    theta <- log(F1) - log(F2)
-    ps    <- n * theta - (n - 1) * (log(F1i + eps) - log(F2i + eps))
-    fitr  <- .gce_ols(X, ps)
-    rho_pred <- exp(as.numeric(X %*% fitr$beta))
-  } else {
-    pi0 <- F1 / (F1 + F2)
-    ps  <- n * pi0 - (n - 1) * (F1i / (F1i + F2i + eps))
-    fitr <- .gce_logit(X, ps, ridge = ridge)
-    pi_pred <- 1 / (1 + exp(-as.numeric(X %*% fitr$beta)))
-    rho_pred <- pi_pred / (1 - pi_pred)
-  }
-  beta <- fitr$beta; se <- fitr$se; V <- fitr$V
-  names(beta) <- names(se) <- colnames(X)
+  ## per-cause (mean-type) jackknife pseudo-observations
+  ps1 <- n * F1 - (n - 1) * F1i
+  ps2 <- n * F2 - (n - 1) * F2i
 
-  ## intercept vs covariate coefficients
+  ## stacked log-link GEE: main effects = log F2(t|z) model, event-type
+  ## interactions = log rho(t|z) model, cluster-robust on subject
+  X  <- stats::model.matrix(~ ., data = Cov)   # intercept + covariates
+  p0 <- ncol(X)
+  start <- c(log(F2), rep(0, p0 - 1L), log(F1) - log(F2), rep(0, p0 - 1L))
+  sf <- .gce_stacked(X, ps1, ps2, start)
+  theta <- sf$theta
+  names(theta) <- c(colnames(X), paste0(colnames(X), ":rho"))
+  main_idx <- seq_len(p0)
+  int_idx  <- p0 + seq_len(p0)
+
+  beta_int <- theta[int_idx]                          # (log rho at z = 0, effects)
+  V_int    <- sf$V[int_idx, int_idx, drop = FALSE]
+  se_int   <- sqrt(diag(V_int))
+  rho_pred <- exp(as.numeric(X %*% beta_int))         # fitted rho(t | z_i)
+
+  ## intercept vs covariate coefficients (within the interaction block)
   keepc <- colnames(X) != "(Intercept)"
   cn    <- colnames(X)[keepc]
-  bcov  <- beta[keepc]; secov <- se[keepc]
-  Vcov  <- V[keepc, keepc, drop = FALSE]
-  zc    <- stats::qnorm(1 - (1 - conf.level) / 2)
+  bcov  <- beta_int[keepc]; secov <- se_int[keepc]
+  Vcov  <- V_int[keepc, keepc, drop = FALSE]
+  names(bcov) <- names(secov) <- cn
+  zc <- stats::qnorm(1 - (1 - conf.level) / 2)
 
   result <- cbind(`exp(coef) (rho ratio)` = round(exp(bcov), 5),
                   `lower .95` = round(exp(bcov - zc * secov), 5),
@@ -148,7 +172,7 @@ gcecif <- function(Time, Ind, Cov, M = 5, t,
                   `P-value`   = round(2 * stats::pnorm(-abs(bcov / secov)), 5))
   rownames(result) <- cn
 
-  ## risk score: mean-centered linear predictor on the covariates
+  ## risk score: mean-centered interaction linear predictor on the covariates
   Xc  <- X[, keepc, drop = FALSE]
   ctr <- colMeans(Xc); sds <- apply(Xc, 2, stats::sd)
   coef_raw <- bcov; coef_std <- coef_raw * sds
@@ -180,43 +204,67 @@ gcecif <- function(Time, Ind, Cov, M = 5, t,
   ratioplot <- .gce_scatter(rs_q, rho_q, "Risk score", expression(rho))
 
   structure(list(
-    call = cl, method = sprintf("cumulative-incidence ratio (%s)", method),
+    call = cl,
+    method = "cumulative-incidence ratio (stacked pseudo-observation)",
     coef = coef_raw, result = result,
     coef_raw = coef_raw, coef_std = coef_std,
     center = ctr, scale = sds, scaling = scaling,
     omnibus = omnibus, ratioplot = ratioplot,
     riskscore = riskscore, normCER = normCER,
-    F1 = F1, F2 = F2, rho0 = F1 / F2, rho = rho_pred, pseudo = ps,
+    F1 = F1, F2 = F2, rho0 = F1 / F2, rho = rho_pred,
+    pseudo = data.frame(F1 = ps1, F2 = ps2),
+    coef_f2 = stats::setNames(theta[main_idx], colnames(X)),
+    vcov = sf$V, converged = sf$converged,
     time = Time, cause = cause, design = Xc,
     covnames = cn, covariate.names = names(Cov),
     n = n, n_event = sum(cause == 1L), n_competing = sum(cause == 2L),
-    t = t, estimator = method, ridge = ridge, conf.level = conf.level
+    t = t, estimator = "stacked", conf.level = conf.level
   ), class = c("gcecif", "gcemod"))
 }
 
-## identity-link GEE (OLS) with robust HC0 variance
-.gce_ols <- function(X, y) {
-  B <- solve(crossprod(X)); beta <- as.numeric(B %*% crossprod(X, y))
-  r <- as.numeric(y - X %*% beta)
-  V <- B %*% (t(X) %*% (X * r^2)) %*% B
-  list(beta = beta, se = sqrt(diag(V)), V = V)
-}
-
-## logit-link GEE via IRLS (optional ridge on non-intercept), robust variance
-.gce_logit <- function(X, y, ridge = 0) {
-  p <- ncol(X); beta <- rep(0, p)
-  Pen <- diag(c(0, rep(ridge, p - 1)), p, p)
-  for (it in 1:100) {
-    eta <- as.numeric(X %*% beta); mu <- 1 / (1 + exp(-eta))
-    W   <- pmax(mu * (1 - mu), 1e-6); z <- eta + (y - mu) / W
-    XtW <- t(X * W)
-    bnew <- solve(XtW %*% X + Pen, XtW %*% z + Pen %*% beta)
-    if (max(abs(bnew - beta)) < 1e-8) { beta <- as.numeric(bnew); break }
-    beta <- as.numeric(bnew)
+## Stacked log-link GEE for the two per-cause pseudo-observation vectors.
+## Gauss-Newton on the working-independence estimating equation
+##   U(theta) = sum_r mu_r w_r (y_r - mu_r) = 0,   mu_r = exp(w_r' theta),
+## with backtracking on the residual sum of squares, and a cluster-robust
+## (subject) sandwich variance: each subject's two rows are grouped before the
+## outer product, capturing the within-subject pseudo-observation dependence.
+.gce_stacked <- function(X, ps1, ps2, start) {
+  n <- nrow(X); p0 <- ncol(X); p2 <- 2L * p0
+  W  <- rbind(cbind(X, X),                        # cause-1 rows: main + interaction
+              cbind(X, matrix(0, n, p0)))         # cause-2 rows: main only
+  y  <- c(ps1, ps2)
+  id <- rep.int(seq_len(n), 2L)
+  rss <- function(th) {
+    m <- exp(as.numeric(W %*% th)); s <- sum((y - m)^2)
+    if (is.finite(s)) s else Inf
   }
-  eta <- as.numeric(X %*% beta); mu <- 1 / (1 + exp(-eta))
-  W <- pmax(mu * (1 - mu), 1e-6); r <- y - mu
-  D <- solve(t(X * W) %*% X + Pen)
-  V <- D %*% (t(X) %*% (X * r^2)) %*% D
-  list(beta = beta, se = sqrt(diag(V)), V = V)
+  theta <- start; f_cur <- rss(theta); step_max <- Inf
+  for (it in 1:200) {
+    mu <- exp(as.numeric(W %*% theta))
+    U  <- as.numeric(crossprod(W, mu * (y - mu)))
+    A  <- crossprod(W * mu)
+    step <- tryCatch(
+      as.numeric(solve(A + diag(1e-8 * mean(diag(A)), p2), U)),
+      error = function(e) NULL)
+    if (is.null(step))
+      stop("Stacked pseudo-observation fit failed (singular information); ",
+           "check that both events carry appreciable incidence at 't'.",
+           call. = FALSE)
+    h <- 1
+    repeat {
+      f_new <- rss(theta + h * step)
+      if (f_new <= f_cur + 1e-12) break
+      h <- h / 2
+      if (h < 1e-10) break
+    }
+    theta <- theta + h * step; f_cur <- rss(theta)
+    step_max <- max(abs(h * step))
+    if (step_max < 1e-9) break
+  }
+  mu <- exp(as.numeric(W %*% theta))
+  Gi <- rowsum(W * (mu * (y - mu)), id)           # per-subject score contributions
+  A  <- crossprod(W * mu)
+  Ai <- solve(A + diag(1e-12 * mean(diag(A)), p2))
+  V  <- Ai %*% crossprod(Gi) %*% Ai
+  list(theta = theta, V = V, converged = step_max < 1e-9, iter = it)
 }

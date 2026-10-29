@@ -40,6 +40,16 @@
 #'   (subdistribution).
 #' @param cluster.se logical; cluster-robust (subject) SEs (default \code{TRUE}).
 #' @param conf.level confidence level (default \code{0.95}).
+#' @param se standard-error method: \code{"robust"} (default; model-based,
+#'   cluster-robust on subject, with the censoring weights treated as fixed) or
+#'   \code{"boot"} (subject bootstrap: the stacked model is refit on \code{B}
+#'   resamples of subjects, re-estimating the censoring weights within each
+#'   resample, so the variance additionally accounts for their estimation).
+#'   Mainly relevant for \code{type = "finegray"}; because estimating the
+#'   weights reduces the asymptotic variance, the fixed-weights default errs,
+#'   if at all, on the conservative side.
+#' @param B number of bootstrap resamples when \code{se = "boot"} (default
+#'   \code{200}).
 #' @param standardize logical; controls only the \emph{reported} coefficient
 #'   scale (default \code{FALSE}). \code{FALSE} reports omega+ ratios per natural
 #'   covariate unit; \code{TRUE} reports them per 1 SD. This is a
@@ -66,8 +76,10 @@
 lunnmcneil <- function(Time, cause, Cov, event = 1, competing = 2,
                        type = c("coxph", "finegray"),
                        cluster.se = TRUE, conf.level = 0.95,
-                       standardize = FALSE, ...) {
+                       standardize = FALSE, se = c("robust", "boot"), B = 200,
+                       ...) {
   type <- match.arg(type)
+  se_method <- match.arg(se)
   Cov <- as.data.frame(Cov)
   if (length(Time) != nrow(Cov) || length(cause) != nrow(Cov)) {
     stop("'Time', 'cause', and 'Cov' must have the same number of observations.",
@@ -119,6 +131,38 @@ lunnmcneil <- function(Time, cause, Cov, event = 1, competing = 2,
   theta_raw <- cf[idx]
   se_raw    <- sqrt(diag(V)[idx])
   names(theta_raw) <- names(se_raw) <- cn
+  Vsub <- V[idx, idx, drop = FALSE]
+
+  ## Optional subject bootstrap: refit on resampled subjects, re-estimating the
+  ## censoring weights within each resample, so the variance accounts for both
+  ## the subject reuse across strata and the estimation of the weights.
+  if (se_method == "boot") {
+    TH <- matrix(NA_real_, B, p)
+    for (b in seq_len(B)) {
+      ix <- sample.int(n, n, replace = TRUE)
+      TH[b, ] <- tryCatch({
+        fb <- if (type == "coxph") {
+          .lm_coxph(Time[ix], cause[ix], X[ix, , drop = FALSE], cn,
+                    event, competing, cluster.se, ...)
+        } else {
+          .lm_finegray(Time[ix], cause[ix], X[ix, , drop = FALSE], cn,
+                       event, competing, ...)
+        }
+        unname(coef(fb$fit)[fb$idx])
+      }, error = function(e) rep(NA_real_, p))
+    }
+    okb <- stats::complete.cases(TH)
+    if (sum(okb) < max(20L, B %/% 2L)) {
+      warning("Bootstrap variance unreliable: only ", sum(okb), " of ", B,
+              " resamples produced a fit; reporting the robust variance ",
+              "instead.", call. = FALSE)
+    } else {
+      Vsub <- stats::cov(TH[okb, , drop = FALSE])
+      dimnames(Vsub) <- list(cn, cn)
+      se_raw <- sqrt(diag(Vsub))
+      names(se_raw) <- cn
+    }
+  }
 
   # Reported scale: raw per-unit (default) or per-SD (standardize = TRUE).
   if (isTRUE(standardize)) {
@@ -145,7 +189,6 @@ lunnmcneil <- function(Time, cause, Cov, event = 1, competing = 2,
     row.names = NULL, stringsAsFactors = FALSE
   )
 
-  Vsub <- V[idx, idx, drop = FALSE]
   omni <- tryCatch({
     stat <- as.numeric(t(theta_raw) %*% solve(Vsub, theta_raw))
     c(statistic = stat, df = p,
@@ -164,6 +207,8 @@ lunnmcneil <- function(Time, cause, Cov, event = 1, competing = 2,
     omegaplus = omegaplus, coef_raw = theta_raw, beta_competing = beta_competing,
     omnibus = omni, terms = cn, conf.level = conf.level,
     standardize = isTRUE(standardize), center = center, scale = scale,
+    se_method = se_method,
+    B = if (se_method == "boot") as.integer(B) else NA_integer_,
     n = n, n_event = sum(cause == event), n_competing = sum(cause == competing)
   ), class = "gce_lunnmcneil")
 }

@@ -4,7 +4,17 @@
 \alias{gcefg}
 \title{Generalized competing event model via Fine-Gray regression}
 \usage{
-gcefg(Time, Ind, Cov, M = 5, t, conf.level = 0.95, standardize = FALSE)
+gcefg(
+  Time,
+  Ind,
+  Cov,
+  M = 5,
+  t,
+  conf.level = 0.95,
+  standardize = FALSE,
+  se = c("robust", "boot"),
+  B = 200
+)
 }
 \arguments{
 \item{Time}{numeric vector of follow-up times.}
@@ -26,6 +36,16 @@ scale (default \code{FALSE} = per natural covariate unit; \code{TRUE} =
 per 1 SD). The risk score is always the normalized (mean-centered) linear
 predictor. Covariate means/SDs are in \code{$scaling}
 (see \code{\link{gce_scaling}}).}
+
+\item{se}{standard-error method passed to \code{\link{lunnmcneil}}:
+\code{"robust"} (default; cluster-robust on subject, censoring weights
+treated as fixed, which errs on the conservative side) or \code{"boot"}
+(subject bootstrap that re-estimates the censoring weights within each
+resample, so the variance additionally accounts for their estimation, at
+higher computational cost).}
+
+\item{B}{number of bootstrap resamples when \code{se = "boot"} (default
+\code{200}).}
 }
 \value{
 An object of class \code{"gcemod"} (subclass \code{"gcefg"}) with the

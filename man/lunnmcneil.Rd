@@ -14,6 +14,8 @@ lunnmcneil(
   cluster.se = TRUE,
   conf.level = 0.95,
   standardize = FALSE,
+  se = c("robust", "boot"),
+  B = 200,
   ...
 )
 }
@@ -42,6 +44,18 @@ covariate unit; \code{TRUE} reports them per 1 SD. This is a
 reparameterization, so Wald tests, p-values, and the omnibus test are
 identical either way. The covariate means/SDs (\code{$center}, \code{$scale})
 are always returned.}
+
+\item{se}{standard-error method: \code{"robust"} (default; model-based,
+cluster-robust on subject, with the censoring weights treated as fixed) or
+\code{"boot"} (subject bootstrap: the stacked model is refit on \code{B}
+resamples of subjects, re-estimating the censoring weights within each
+resample, so the variance additionally accounts for their estimation).
+Mainly relevant for \code{type = "finegray"}; because estimating the
+weights reduces the asymptotic variance, the fixed-weights default errs,
+if at all, on the conservative side.}
+
+\item{B}{number of bootstrap resamples when \code{se = "boot"} (default
+\code{200}).}
 
 \item{...}{passed to \code{\link[survival]{coxph}}.}
 }

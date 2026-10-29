@@ -6,10 +6,19 @@ test_that("gcecif returns a well-formed gcemod object", {
 
   expect_s3_class(fit, "gcemod")
   expect_s3_class(fit, "gcecif")
+  expect_true(fit$converged)
   expect_true(fit$F1 > 0 && fit$F2 > 0)
   expect_equal(fit$rho0, fit$F1 / fit$F2, tolerance = 1e-10)
-  expect_length(fit$pseudo, length(d$Time))
+  # per-cause (mean-type) pseudo-observations, one pair per subject
+  expect_named(fit$pseudo, c("F1", "F2"))
+  expect_equal(nrow(fit$pseudo), length(d$Time))
+  expect_true(all(is.finite(fit$pseudo$F1)) && all(is.finite(fit$pseudo$F2)))
+  # jackknife pseudo-value means track the full-sample AJ estimates (approximately;
+  # the identity is exact only for linear statistics)
+  expect_equal(mean(fit$pseudo$F1), fit$F1, tolerance = 0.05)
+  expect_equal(mean(fit$pseudo$F2), fit$F2, tolerance = 0.05)
   expect_length(fit$riskscore, length(d$Time))
+  expect_length(fit$coef_f2, ncol(fit$design) + 1L)   # F2 nuisance model
 
   # result table: one row per covariate term, intercept excluded
   expect_true(all(c("exp(coef) (rho ratio)", "lower .95", "upper .95", "P-value")

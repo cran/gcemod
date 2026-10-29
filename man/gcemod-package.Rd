@@ -79,5 +79,10 @@ Authors:
   \item Loren Mell \email{lmell@ucsd.edu}
 }
 
+Other contributors:
+\itemize{
+  \item Morten Overgaard \email{moov@ph.au.dk} (proposed the stacked pseudo-observation estimator used by gcecif()) [contributor]
+}
+
 }
 \keyword{internal}

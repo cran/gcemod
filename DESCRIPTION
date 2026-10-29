@@ -1,10 +1,12 @@
 Package: gcemod
 Type: Package
 Title: Generalized Competing Event Models with Lunn-McNeil Testing
-Version: 0.3.0
-Date: 2026-09-02
+Version: 0.3.1
+Date: 2026-10-28
 Authors@R: 
-    person("Loren", "Mell", email = "lmell@ucsd.edu", role = c("aut", "cre"))
+    c(person("Loren", "Mell", email = "lmell@ucsd.edu", role = c("aut", "cre")),
+      person("Morten", "Overgaard", email = "moov@ph.au.dk", role = "ctb",
+             comment = "proposed the stacked pseudo-observation estimator used by gcecif()"))
 Description: Fits generalized competing event (GCE) models and estimates
     covariate effects on omega-plus, the ratio of the hazard for an
     event of interest to the hazard for a competing event, on both the
@@ -32,8 +34,10 @@ VignetteBuilder: knitr
 Config/testthat/edition: 3
 Config/roxygen2/version: 8.0.0
 NeedsCompilation: no
-Packaged: 2026-09-03 00:37:58 UTC; lorenmell
-Author: Loren Mell [aut, cre]
+Packaged: 2026-10-28 22:55:06 UTC; lorenmell
+Author: Loren Mell [aut, cre],
+  Morten Overgaard [ctb] (proposed the stacked pseudo-observation
+    estimator used by gcecif())
 Maintainer: Loren Mell <lmell@ucsd.edu>
 Repository: CRAN
-Date/Publication: 2026-09-24 04:20:07 UTC
+Date/Publication: 2026-10-29 20:40:27 UTC
